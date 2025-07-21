@@ -127,6 +127,12 @@
 				remote-endpoint = <&mis5001_out>;
 				data-lanes = <1 2>;
 			};
+
+			csi_dphy_input2: endpoint@2 {
+				reg = <2>;
+				remote-endpoint = <&ov5640_out>;
+				data-lanes = <1 2>;
+			};
 		};
 
 		port@1 {
@@ -144,7 +150,7 @@
 
 &i2c4 {
 	status = "okay";
-	clock-frequency = <400000>;
+	clock-frequency = <100000>;
 
 	sc3336: sc3336@30 {
 		compatible = "smartsens,sc3336";
@@ -187,6 +193,28 @@
 			};
 		};
 	};
+
+	ov5640: ov5640@3c {
+		compatible = "ovti,ov5640";
+		status = "okay";
+		reg = <0x3c>;
+		clocks = <&cru MCLK_REF_MIPI0>;
+		clock-names = "xvclk";
+		reset-gpios = <&gpio3 RK_PC5 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&mipi_refclk_out0>;
+		rockchip,camera-module-index = <0>;
+		rockchip,camera-module-facing = "back";
+		rockchip,camera-module-name = "CMK-OT2115-PC1";
+		rockchip,camera-module-lens-name = "30IRC-F16";
+		port {
+			ov5640_out: endpoint {
+				remote-endpoint = <&csi_dphy_input2>;
+				data-lanes = <1 2>;
+			};
+		};
+	};
+
 };
 
 &mipi0_csi2 {
