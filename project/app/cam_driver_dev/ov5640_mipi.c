@@ -3163,7 +3163,6 @@ static int ov5640_get_fmt(struct v4l2_subdev *sd,
 		mutex_unlock(&sensor->lock);
 		return -ENOTTY;
 #endif
-
     } 
     else
     {
@@ -3769,9 +3768,8 @@ static int ov5640_g_frame_interval(struct v4l2_subdev *sd,
     }
     else
     {
-        //FIX it pls
         fi->interval.numerator = 1;
-        fi->interval.denominator = mode->max_fps; 
+        fi->interval.denominator = ov5640_framerates[mode->max_fps]; 
     }
     return 0;
 }
@@ -4002,6 +4000,8 @@ static int ov5640_enum_frame_interval(
     const struct ov5640_mode_info *mode;
     struct v4l2_fract tpf;
     int ret;
+
+    printk("%s\n", __func__);
 
     if (fie->pad != 0)
         return -EINVAL;
