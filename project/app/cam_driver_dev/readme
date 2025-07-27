@@ -1,0 +1,55 @@
+
+Show media topology:
+    media-ctl -d /dev/media0 -p
+
+Example of setting camera format and resolution 
+    media-ctl -d /dev/media0 --set-v4l2 "'ov5640 4-003c':0 [fmt:UYVY8_2X8/1280x720]"
+    or 
+    media-ctl -d /dev/media0 --set-v4l2 "'ov5640 4-003c':0 [fmt:UYVY8_2X8/176x144]"
+
+
+    Some commonly used FourCC codes include: 
+    -   UYVY8_2X8: YUV 4:2:2, 16 bits per pixel, interleaved.
+    -   YUYV8_2X8: Similar to UYVY8_2X8.
+    -   RGB565_2X8_LE: RGB 5:6:5, 16 bits per pixel, little endian.
+    -   SBGGR10_1X10: Bayer format, 10 bits per pixel, where the first pixel is S (Green).
+    -   SRGGB10_1X10: Bayer format, 10 bits per pixel, where the first pixel is S (Red).
+    -   AYUV32: 32-bit ARGB format.
+    -   VYUY8_1X16: YUV 4:2:2, 16 bits per pixel, interleaved.
+
+    This command call xxxx_set_fmt callback in camera driver? and try to set new 
+    specified format 
+
+
+
+Take test video and save to file
+
+    Check /dev/video0 format
+    v4l2-ctl -d 0 --all
+
+    Set /dev/video0 format via 4l2-ctl
+    v4l2-ctl --device=/dev/video0 --set-fmt-video=width=176,height=144,pixelformat=UYVY
+
+    v4l2-ctl --device=/dev/video0 --stream-mmap --stream-to=/root/video100.raw --stream-count=100
+
+Get video using adb
+    adb pull /root/video100.raw
+Play with ffmpeg player
+    ffplay -video_size 176x144 -pixel_format uyvy422 -framerate 30 -i video100.raw
+
+
+RAW YUYV 640x480
+    v4l2-ctl --device=/dev/video0 --set-fmt-video=width=640,height=480,pixelformat=YUYV --stream-count=-1 | gst-launch-1.0 -v v4l2src device=/dev/video0 ! video/x-raw , width=640,height=480,format=YUYV ! rtpvrawpay ! udpsink host=172.32.0.100 port = 5000
+
+
+JPEG
+v4l2-ctl --device=/dev/video11 --set-fmt-video=width=640,height=480,pixelformat=UYVY,frame_rate=60 --stream-count=-1 | gst-launch-1.0 v4l2src device=/dev/video11 do-timestamp=false !video/x-raw , width=640,height=480,format=UYVY,framerate=60/1 ! videoconvert ! jpegenc quality=80 ! rtpjpegpay ! udpsink host=172.32.0.100 port = 5000 1>/dev/null 2>&1
+
+
+
+
+
+reciver:
+gst-launch-1.0 udpsrc port=5000 caps ="application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)RAW, format=UYVY , sampling=(string)YCbCr-4:2:2, depth=(string)8, width=(string)1024, height=(string)768, payload=(int)96" ! rtpvrawdepay ! video/x-raw, format=UYVY, width=1024, height=768, format=UYVY , sampling=YCbCr-4:2:2 ! videoconvert ! autovideosink
+
+gst-launch-1.0 udpsrc port=5000 caps ="application/x-rtp, media=video, encoding-name=JPEG, payload=26" ! rtpjpegdepay ! jpegdec ! videoconvert ! autovideosink sync=false
