@@ -146,15 +146,6 @@ static const struct ov5640_pixfmt ov5640_formats[] = {
 	{ MEDIA_BUS_FMT_SRGGB8_1X8, V4L2_COLORSPACE_SRGB, },
 };
 
-/*
- * FIXME: remove this when a subdev API becomes available
- * to set the MIPI CSI-2 virtual channel.
- */
-static unsigned int virtual_channel;
-module_param(virtual_channel, uint, 0444);
-MODULE_PARM_DESC(virtual_channel,
-		 "MIPI CSI-2 virtual channel (0..3), default 0");
-
 static const int ov5640_framerates[] = {
 	[OV5640_15_FPS] = 15,
 	[OV5640_30_FPS] = 30,
@@ -1521,27 +1512,6 @@ static int ov5640_set_binning(struct ov5640_dev *sensor, bool enable)
 			      BIT(0), enable ? BIT(0) : 0);
 }
 
-static int ov5640_set_virtual_channel(struct ov5640_dev *sensor)
-{
-	struct i2c_client *client = sensor->i2c_client;
-	u8 temp, channel = virtual_channel;
-	int ret;
-
-	if (channel > 3) {
-		dev_err(&client->dev,
-			"%s: wrong virtual_channel parameter, expected (0..3), got %d\n",
-			__func__, channel);
-		return -EINVAL;
-	}
-
-	ret = ov5640_read_reg(sensor, OV5640_REG_DEBUG_MODE, &temp);
-	if (ret)
-		return ret;
-	temp &= ~(3 << 6);
-	temp |= (channel << 6);
-	return ov5640_write_reg(sensor, OV5640_REG_DEBUG_MODE, temp);
-}
-
 static const struct ov5640_mode_info *
 ov5640_find_mode(struct ov5640_dev *sensor, enum ov5640_frame_rate fr,
 		 int width, int height, bool nearest)
@@ -1823,9 +1793,6 @@ static int ov5640_set_mode(struct ov5640_dev *sensor)
 	if (ret < 0)
 		return ret;
 	ret = ov5640_set_bandingfilter(sensor);
-	if (ret < 0)
-		return ret;
-	ret = ov5640_set_virtual_channel(sensor);
 	if (ret < 0)
 		return ret;
 

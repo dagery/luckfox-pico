@@ -216,7 +216,7 @@ static const s64 ov5640_csi2_link_freqs[] = {
 };
 
 /* Link freq for default mode: UYVY 16 bpp, 2 data lanes. */
-#define OV5640_DEFAULT_LINK_FREQ 13
+#define OV5640_DEFAULT_LINK_FREQ 22
 
 enum ov5640_format_mux
 {
@@ -253,22 +253,6 @@ static const struct ov5640_pixfmt ov5640_csi2_formats[] = {
         .bpp = 16,
         .ctrl00 = 0x30,
         .mux = OV5640_FMT_MUX_YUV422,
-    },
-    {
-        /* RGB565 {g[2:0],b[4:0]},{r[4:0],g[5:3]} */
-        .code = MEDIA_BUS_FMT_RGB565_1X16,
-        .colorspace = V4L2_COLORSPACE_SRGB,
-        .bpp = 16,
-        .ctrl00 = 0x6f,
-        .mux = OV5640_FMT_MUX_RGB,
-    },
-    {
-        /* BGR888: RGB */
-        .code = MEDIA_BUS_FMT_BGR888_1X24,
-        .colorspace = V4L2_COLORSPACE_SRGB,
-        .bpp = 24,
-        .ctrl00 = 0x23,
-        .mux = OV5640_FMT_MUX_RGB,
     },
     {
         /* Raw, BGBG... / GRGR... */
@@ -546,9 +530,25 @@ static const struct v4l2_mbus_framefmt ov5640_csi2_default_fmt = {
 };
 
 static const struct reg_value ov5640_init_setting[] = {
-    {0x3103, 0x11, 0, 0}, // system clock from pad, bit[1]
-    {0x3008, 0x82, 0, 5}, // software reset, bit[7], delay 5ms
-    {0x3103, 0x03, 0, 0},
+
+    /*
+        Based on OV5640 Auto FocusCamera Module Application Notes
+        initial settings VGA YUV output
+        For 24Mhz input clock with 24Mhz PCLK
+    */
+
+    
+    {0x3103, 0x11, 0, 0},   // system clock from pad, bit[1]
+    {0x3008, 0x82, 0, 5},   // software reset, bit[7], delay 5ms
+    {0x3008, 0x42, 0, 0},   // software powerdown, bit[6]
+    {0x3103, 0x03, 0, 0},   // system clock from PLL, bit[1]
+
+    // {0x3017, 0xff, 0, 0},   // In MIPI CSI-2 D9-D4 used for mipi lanes
+    //                         // Set them as output
+    // {0x3018, 0xff, 0, 0},   //  Set D5, D4
+    // {0x3034, 0x18, 0, 0},   //  MIPI - 8Bit
+    // {0x302c, 0xC0, 0, 0},   //  Driver 4x, FREX disable
+
     {0x3630, 0x36, 0, 0},
     {0x3631, 0x0e, 0, 0},
     {0x3632, 0xe2, 0, 0},
@@ -564,15 +564,15 @@ static const struct reg_value ov5640_init_setting[] = {
     {0x3906, 0x10, 0, 0},
     {0x3901, 0x0a, 0, 0},
     {0x3731, 0x12, 0, 0},
-    {0x3600, 0x08, 0, 0},
-    {0x3601, 0x33, 0, 0},
-    {0x302d, 0x60, 0, 0},
+    {0x3600, 0x08, 0, 0},   // VCM control
+    {0x3601, 0x33, 0, 0},   // VCM control
+    {0x302d, 0x60, 0, 0},   // System control
     {0x3620, 0x52, 0, 0},
     {0x371b, 0x20, 0, 0},
     {0x471c, 0x50, 0, 0},
-    {0x3a13, 0x43, 0, 0},
-    {0x3a18, 0x00, 0, 0},
-    {0x3a19, 0xf8, 0, 0},
+    {0x3a13, 0x43, 0, 0},   // pre-gain = 1.047x
+    {0x3a18, 0x00, 0, 0},   // gain ceiling
+    {0x3a19, 0xf8, 0, 0},   // gain ceiling 15.5x
     {0x3635, 0x13, 0, 0},
     {0x3636, 0x03, 0, 0},
     {0x3634, 0x40, 0, 0},
@@ -1210,8 +1210,8 @@ static const struct ov5640_mode_info ov5640_mode_data[OV5640_NUM_MODES] = {
          .analog_crop = {
              .left = 0,
              .top = 4,
-             .width = 2624,
-             .height = 1944,
+             .width = OV5640_NATIVE_WIDTH,
+             .height = OV5640_PIXEL_ARRAY_HEIGHT,
          },
          .crop = {
              .left = 16,
@@ -1285,7 +1285,7 @@ static const struct ov5640_mode_info ov5640_mode_data[OV5640_NUM_MODES] = {
      },
      .reg_data = ov5640_setting_720P_1280_720,
      .reg_data_size = ARRAY_SIZE(ov5640_setting_720P_1280_720),
-     .max_fps = OV5640_30_FPS,
+     .max_fps = OV5640_60_FPS,
      .def_fps = OV5640_30_FPS,
      .vc[PAD0] = V4L2_MBUS_CSI2_CHANNEL_0,
      .hdr_mode = NO_HDR
@@ -2281,28 +2281,6 @@ static int ov5640_set_binning(struct ov5640_dev *sensor, bool enable)
                           BIT(0), enable ? BIT(0) : 0);
 }
 
-// static int ov5640_set_virtual_channel(struct ov5640_dev *sensor)
-// {
-//     struct i2c_client *client = sensor->i2c_client;
-//     u8 temp, channel = virtual_channel;
-//     int ret;
-
-//     if (channel > 3)
-//     {
-//         dev_err(&client->dev,
-//                 "%s: wrong virtual_channel parameter, expected (0..3), got %d\n",
-//                 __func__, channel);
-//         return -EINVAL;
-//     }
-
-//     ret = ov5640_read_reg(sensor, OV5640_REG_DEBUG_MODE, &temp);
-//     if (ret)
-//         return ret;
-//     temp &= ~(3 << 6);
-//     temp |= (channel << 6);
-//     return ov5640_write_reg(sensor, OV5640_REG_DEBUG_MODE, temp);
-// }
-
 static const struct ov5640_mode_info *
 ov5640_find_mode(struct ov5640_dev *sensor, int width, int height, bool nearest)
 {
@@ -2935,7 +2913,7 @@ static int ov5640_try_fmt_internal(struct v4l2_subdev *sd,
     if (bpp == 8 && mode->width < 1280)
         mode = &ov5640_mode_data[OV5640_MODE_720P_1280_720];
     else if (bpp == 16 && mode->width > 1024)
-        mode = &ov5640_mode_data[OV5640_MODE_XGA_1024_768];
+        //mode = &ov5640_mode_data[OV5640_MODE_XGA_1024_768];
 
     fmt->width = mode->width;
     fmt->height = mode->height;
@@ -3398,39 +3376,6 @@ static int ov5640_set_ctrl_vblank(struct ov5640_dev *sensor, int value)
                               mode->height + value);
 }
 
-static int ov5640_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
-{
-    struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
-    struct ov5640_dev *sensor = to_ov5640_dev(sd);
-    int val;
-
-    /* v4l2_ctrl_lock() locks our own mutex */
-
-    if (!pm_runtime_get_if_in_use(&sensor->i2c_client->dev))
-        return 0;
-
-    switch (ctrl->id)
-    {
-    case V4L2_CID_AUTOGAIN:
-        val = ov5640_get_gain(sensor);
-        if (val < 0)
-            return val;
-        sensor->ctrls.gain->val = val;
-        break;
-    case V4L2_CID_EXPOSURE_AUTO:
-        val = ov5640_get_exposure(sensor);
-        if (val < 0)
-            return val;
-        sensor->ctrls.exposure->val = val;
-        break;
-    }
-
-    pm_runtime_mark_last_busy(&sensor->i2c_client->dev);
-    pm_runtime_put_autosuspend(&sensor->i2c_client->dev);
-
-    return 0;
-}
-
 static int ov5640_g_frame_interval(struct v4l2_subdev *sd,
                                    struct v4l2_subdev_frame_interval *fi)
 {
@@ -3528,7 +3473,6 @@ static int ov5640_s_ctrl(struct v4l2_ctrl *ctrl)
 }
 
 static const struct v4l2_ctrl_ops ov5640_ctrl_ops = {
-    .g_volatile_ctrl = ov5640_g_volatile_ctrl,
     .s_ctrl = ov5640_s_ctrl,
 };
 
@@ -3833,9 +3777,6 @@ static int ov5640_open(struct v4l2_subdev *sd,
 }
 
 static const struct v4l2_subdev_core_ops ov5640_core_ops = {
-    .log_status = v4l2_ctrl_subdev_log_status,
-    .subscribe_event = v4l2_ctrl_subdev_subscribe_event,
-    .unsubscribe_event = v4l2_event_subdev_unsubscribe,
     .s_power = ov5640_s_power,
     .ioctl = ov5640_ioctl,
 };
@@ -3860,9 +3801,11 @@ static const struct v4l2_subdev_ops ov5640_subdev_ops = {
     .pad = &ov5640_pad_ops,
 };
 
+#ifdef CONFIG_VIDEO_V4L2_SUBDEV_API
 static const struct v4l2_subdev_internal_ops ov5640_internal_ops = {
     .open = ov5640_open,
 };
+#endif
 
 static int ov5640_get_regulators(struct ov5640_dev *sensor)
 {
@@ -3916,13 +3859,13 @@ static int ov5640_probe(struct i2c_client *client,
 
     /*
      * default init sequence initialize sensor to
-     * YUV422 YUYV VGA 60fps in MIPI CSI-2 mode
+     * YUV422 YUYV VGA 15fps in MIPI CSI-2 mode
      */
     sensor->frame_interval.numerator = 1;
-    sensor->frame_interval.denominator = ov5640_framerates[OV5640_60_FPS];
-    sensor->current_fr = OV5640_60_FPS;
+    sensor->frame_interval.denominator = ov5640_framerates[OV5640_30_FPS];
+    sensor->current_fr = OV5640_30_FPS;
     sensor->current_mode =
-        &ov5640_mode_data[OV5640_MODE_VGA_640_480];
+        &ov5640_mode_data[OV5640_MODE_720P_1280_720];
     sensor->last_mode = sensor->current_mode;
     sensor->current_link_freq =
         ov5640_csi2_link_freqs[OV5640_DEFAULT_LINK_FREQ];
